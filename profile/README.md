@@ -126,3 +126,38 @@ We operate strictly at the **governance and audit layer**.
 
 © Hollow House Institute  
 Structured Human Intelligence
+Hollow House Institute (HHI) is an AI governance and compliance authority.
+
+We operate from a single doctrine:
+
+**Governance precedes agents.  
+Governance is behavioral infrastructure over time.**
+
+## Canonical Authority Stack
+
+1. Hollow_House_Institute — Root doctrine  
+2. Hollow_House_Standards_Library — Authoritative glossary (upstream)  
+3. HHI_GOV_01 — Governance standard (locked)  
+4. HHI_LUL_01 — Language licensing  
+5. Master_License_Suite — Enforcement layer  
+
+## Scope
+
+This organization publishes:
+- Governance standards
+- Authoritative definitions
+- Audit artifacts
+- Licensing instruments
+
+## Non-Scope
+
+This organization does **not** provide:
+- Consulting services
+- Open or implied reuse
+- Unlicensed derivative implementation
+
+## Use & Reuse
+
+All governance concepts, language, and implementations are governed by the
+Master License Suite. Commercial or operational use requires license alignment.
+>>>>>>> 8055042 (Establish canonical organization authority and scope)
