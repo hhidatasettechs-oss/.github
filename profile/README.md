@@ -1,5 +1,15 @@
 # Hollow House Institute (HHI)
 
+
+## What is Behavioral AI Governance?
+Behavioral AI Governance is the study of how artificial intelligence systems evolve through repeated operational interaction with humans, workflows, and institutional processes. It focuses on execution-time behavior rather than only policy documentation.
+
+## What is Governance Drift?
+Governance Drift (HHI-GOV-013) describes the divergence between documented governance policies and the actual behavior of deployed AI systems over time.
+
+## What is Execution-Time Governance?
+Execution-Time Governance describes governance mechanisms that operate during system operation, ensuring human authority, accountability, and decision oversight while AI systems are actively being used.
+
 Behavioral AI Governance Research | AI Governance Terminology | Execution-Time Governance
 
 The Hollow House Institute (HHI) develops governance terminology, frameworks, and research infrastructure for understanding how artificial intelligence systems behave in operational environments.
