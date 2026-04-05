@@ -1,8 +1,8 @@
-name: governance-enforce-org
+name: governance-full-enforce
 
 on:
-  pull_request:
   push:
+  pull_request:
   schedule:
     - cron: "0 */6 * * *"
 
@@ -13,43 +13,80 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install jq
+      - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Scan Organization Repos (Decision Boundary)
+      - name: Org Scan (Decision Boundary + Integrity)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           org="hhidatasettechs-oss"
           repos=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/orgs/$org/repos?per_page=100 | jq -r '.[].clone_url')
 
+          mkdir -p repos telemetry
           fail=0
-          mkdir -p telemetry
 
           for repo in $repos; do
             name=$(basename $repo .git)
             git clone --depth=1 $repo repos/$name 2>/dev/null || continue
 
-            if [ ! -f repos/$name/README.md ]; then
+            status="pass"
+            reason=""
+
+            # --- README Decision Boundary ---
+            if [ ! -f repos/$name/README.md ] || \
+               ! grep -q "Time turns behavior into infrastructure" repos/$name/README.md || \
+               ! grep -q "Behavior is the most honest data there is" repos/$name/README.md; then
               status="fail"
-              fail=1
-            elif ! grep -q "Time turns behavior into infrastructure" repos/$name/README.md || \
-                 ! grep -q "Behavior is the most honest data there is" repos/$name/README.md; then
-              status="fail"
-              fail=1
-            else
-              status="pass"
+              reason="decision_boundary"
             fi
 
-            echo "{ \"repo\": \"$name\", \"status\": \"$status\" }" >> telemetry/results.json
+            # --- LICENSE VALIDATION ---
+            if [ "$status" = "pass" ] && [ ! -f repos/$name/LICENSE ]; then
+              status="fail"
+              reason="license_missing"
+            fi
+
+            # --- CHECKSUM ENFORCEMENT ---
+            if [ "$status" = "pass" ] && [ -f repos/$name/CHECKSUMS.sha256 ]; then
+              (cd repos/$name && sha256sum -c CHECKSUMS.sha256 >/dev/null 2>&1) || {
+                status="fail"
+                reason="checksum_mismatch"
+              }
+            fi
+
+            # --- DATASET INTEGRITY ---
+            if [ "$status" = "pass" ] && [ -d repos/$name/datasets ]; then
+              count=$(find repos/$name/datasets -type f | wc -l)
+              if [ "$count" -eq 0 ]; then
+                status="fail"
+                reason="empty_dataset"
+              fi
+            fi
+
+            # --- TELEMETRY ---
+            echo "{ \"repo\": \"$name\", \"status\": \"$status\", \"reason\": \"$reason\" }" >> telemetry/results.json
+
+            if [ "$status" = "fail" ]; then
+              fail=1
+            fi
           done
 
+          # --- STOP AUTHORITY ---
           if [ $fail -eq 1 ]; then
-            echo "Decision Boundary failed across org"
+            echo "{"
+            echo "\"event\": \"governance_check\","
+            echo "\"actor\": \"${{ github.actor }}\","
+            echo "\"decision_boundary\": \"fail\","
+            echo "\"action\": \"block\","
+            echo "\"outcome\": \"failure\","
+            echo "\"escalation_status\": \"active\","
+            echo "\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
+            echo "}"
             exit 1
           fi
 
-      - name: Upload Telemetry Artifact
+      - name: Upload Telemetry
         uses: actions/upload-artifact@v4
         with:
           name: governance-telemetry
