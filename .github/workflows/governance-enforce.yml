@@ -1,13 +1,9 @@
-name: governance-final-lock
+name: HHI Governance Enforcement
 
 on:
   push:
+    branches: [ main ]
   pull_request:
-  schedule:
-    - cron: "0 */6 * * *"
-
-permissions:
-  contents: write
 
 jobs:
   enforce:
@@ -16,107 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Org Enforcement + Escalation Lock
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Governance Enforcement
         run: |
-          org="Hollow-house-institute"
-          repos=$(curl -s -H "Authorization: token $GH_TOKEN" "https://api.github.com/orgs/Hollow-house-institute/repos?per_page=100" | jq -r ".[] | .clone_url")
-
-          mkdir -p repos telemetry registry && rm -rf repos/*
-          fail=0
-
-          # Load existing escalation registry
-          if [ -f registry/escalation.json ]; then
-            cp registry/escalation.json escalation.json
-          else
-            echo "{}" > escalation.json
-          fi
-
-          for repo in $repos; do
-            name=$(basename $repo .git)
-            git clone --depth=1 $repo repos/$name 2>/dev/null || continue
-
-            status="pass"
-            reason=""
-
-            # --- DECISION BOUNDARY ---
-            if [ ! -f repos/$name/README.md ] || \
-               ! grep -q "Time turns behavior into infrastructure" repos/$name/README.md || \
-               ! grep -q "Behavior is the most honest data there is" repos/$name/README.md; then
-              status="fail"
-              reason="decision_boundary"
-            fi
-
-            # --- LICENSE ---
-            if [ "$status" = "pass" ] && ! grep -q "HHI" repos/$name/LICENSE 2>/dev/null; then
-              status="fail"
-              reason="license_invalid"
-            fi
-
-            # --- ESCALATION LOCK ---
-            if [ "$status" = "fail" ]; then
-              fail=1
-              jq --arg repo "$name" --arg reason "$reason" \
-                '.[$repo] = { "status":"active", "reason":$reason }' \
-                escalation.json > tmp.json && mv tmp.json escalation.json
-            fi
-
-            echo "{ \"repo\":\"$name\", \"status\":\"$status\", \"reason\":\"$reason\" }" >> telemetry/run.json
-          done
-
-          # Persist escalation registry
-          mv escalation.json registry/escalation.json
-
-          # --- STOP AUTHORITY ---
-          if [ $fail -eq 1 ]; then
-            echo "Escalation active — blocking"
-            exit 1
-          fi
-
-      - name: Build Audit Registry (Longitudinal)
-        env:
-          DOI: https://doi.org/10.5281/zenodo.18615600
-        run: |
-          mkdir -p registry
-
-          timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-          jq -n \
-            --arg time "$timestamp" \
-            --arg actor "${{ github.actor }}" \
-            --arg commit "${{ github.sha }}" \
-            --arg doi "$DOI" \
-            --slurpfile run telemetry/run.json \
-            '{
-              timestamp: $time,
-              actor: $actor,
-              commit: $commit,
-              doi: $doi,
-              results: $run
-            }' > registry/latest.json
-
-          # Append to audit ledger
-          if [ -f registry/audit_log.json ]; then
-            jq '. += [input]' registry/audit_log.json registry/latest.json > tmp.json && mv tmp.json registry/audit_log.json
-          else
-            jq -n --slurpfile first registry/latest.json '$first' > registry/audit_log.json
-          fi
-
-      - name: Commit Audit Registry
-        run: |
-          git config user.name "governance-bot"
-          git config user.email "actions@github.com"
-
-          git add registry/
-          git commit -m "audit: update escalation + longitudinal registry" || echo "no changes"
-          git push
-
-      - name: Upload Telemetry
-        uses: actions/upload-artifact@v4
-        with:
-          name: governance-run
-          path: telemetry/run.json
+          chmod +x governance/scripts/enforce_governance.sh
+          bash governance/scripts/enforce_governance.sh
