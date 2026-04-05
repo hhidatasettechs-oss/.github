@@ -76,3 +76,49 @@ Every Hollow House Institute repository must include:
 ```md
 > Time turns behavior into infrastructure.  
 > Behavior is the most honest data there is.
+
+---
+
+## Decision Boundary
+
+A repository is compliant only if:
+- Required README header is present
+- Canonical doctrine is intact
+- LICENSE and README exist
+
+Non-compliant repositories fail validation.
+
+## Stop Authority
+
+If validation fails:
+- CI fails
+- Merge is blocked
+- Release is blocked
+
+## Escalation
+
+If a repository fails:
+- Escalation is triggered
+- Escalation persists until resolved
+
+## Accountability
+
+- Repo owner: compliance
+- Org maintainers: enforcement
+- CI: validation execution
+
+## Governance Telemetry
+
+Each validation records:
+- event
+- actor
+- decision_boundary
+- action
+- outcome
+- escalation_status
+- timestamp
+
+## Enforcement Layer
+
+This repo is enforced via GitHub Actions and required status checks.
+

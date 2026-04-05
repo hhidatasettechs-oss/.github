@@ -1,0 +1,31 @@
+name: governance-enforce
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate README header (Decision Boundary)
+        run: |
+          if ! grep -q "Time turns behavior into infrastructure" README.md; then
+            echo "Decision Boundary failed"
+            exit 1
+          fi
+
+      - name: Telemetry Output
+        run: |
+          echo "{"
+          echo "\"event\": \"governance_check\","
+          echo "\"actor\": \"${{ github.actor }}\","
+          echo "\"decision_boundary\": \"pass\","
+          echo "\"action\": \"allow\","
+          echo "\"outcome\": \"success\","
+          echo "\"escalation_status\": \"none\","
+          echo "\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
+          echo "}"
