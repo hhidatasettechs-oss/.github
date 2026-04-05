@@ -24,9 +24,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           org="hhidatasettechs-oss"
-          repos=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/orgs/$org/repos?per_page=100 | jq -r '.[].clone_url')
+          repos=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/orgs/$org/repos?per_page=100 | jq -r ".[].clone_url" || echo "") -s -H "Authorization: token $GH_TOKEN" https://api.github.com/orgs/$org/repos?per_page=100 | jq -r '.[].clone_url')
 
-          mkdir -p repos telemetry registry
+          mkdir -p repos telemetry registry && rm -rf repos/*
           fail=0
 
           # Load existing escalation registry
