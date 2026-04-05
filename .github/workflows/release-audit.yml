@@ -1,0 +1,108 @@
+name: release-audit
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+          python -m pip install --upgrade pip jsonschema
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEYID="$(gpg --list-secret-keys --keyid-format LONG | awk '/sec/{print $2}' | head -n1 | cut -d'/' -f2)"
+          echo "KEYID=$KEYID" >> "$GITHUB_ENV"
+
+      - name: Validate dataset metadata against strict schema
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          from jsonschema import validate
+
+          schema = json.loads(pathlib.Path("schemas/hhi_dataset.schema.json").read_text())
+          candidates = []
+          for p in pathlib.Path(".").rglob("metadata.json"):
+              if "datasets" in p.parts:
+                  candidates.append(p)
+
+          errors = []
+          for p in candidates:
+              try:
+                  data = json.loads(p.read_text())
+                  validate(instance=data, schema=schema)
+              except Exception as e:
+                  errors.append(f"{p}: {e}")
+
+          if errors:
+              print("\n".join(errors))
+              sys.exit(1)
+          print(f"validated {len(candidates)} metadata.json file(s)")
+          PY
+
+      - name: Generate checksums
+        run: |
+          find . -type f \
+            ! -path "./.git/*" \
+            ! -path "./.github/workflows/*" \
+            ! -name "CHECKSUMS.sha256" \
+            ! -name "CHECKSUMS.sig" \
+            -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256
+
+      - name: Sign checksum manifest
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          gpg --batch --yes \
+            --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" \
+            --local-user "$KEYID" \
+            --output CHECKSUMS.sig \
+            --detach-sign CHECKSUMS.sha256
+
+      - name: Build DOI-linked audit export
+        env:
+          DOI_URL: https://doi.org/10.5281/zenodo.18615600
+        run: |
+          python - <<'PY'
+          import json, hashlib, pathlib, os
+          audit = {
+            "authority": "Hollow House Institute",
+            "doi": os.environ["DOI_URL"],
+            "release_tag": os.environ["GITHUB_REF_NAME"],
+            "release_id": os.environ["GITHUB_REF"],
+            "actor": os.environ["GITHUB_ACTOR"],
+            "repository": os.environ["GITHUB_REPOSITORY"],
+            "commit": os.environ["GITHUB_SHA"],
+            "checksum_manifest": "CHECKSUMS.sha256",
+            "checksum_signature": "CHECKSUMS.sig",
+            "checksum_manifest_sha256": hashlib.sha256(pathlib.Path("CHECKSUMS.sha256").read_bytes()).hexdigest(),
+            "signature_sha256": hashlib.sha256(pathlib.Path("CHECKSUMS.sig").read_bytes()).hexdigest()
+          }
+          pathlib.Path("AUDIT_EXPORT.json").write_text(json.dumps(audit, indent=2))
+          PY
+
+      - name: Upload audit artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-audit-${{ github.ref_name }}
+          path: |
+            CHECKSUMS.sha256
+            CHECKSUMS.sig
+            AUDIT_EXPORT.json
